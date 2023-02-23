@@ -231,6 +231,9 @@ uvmfirst(pagetable_t pagetable, uchar *src, uint sz)
 uint64
 uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
 {
+
+  printf("oldsz: %d, newsz: %d, xperm: %d", oldsz, newsz, xperm);
+
   char *mem;
   uint64 a;
 

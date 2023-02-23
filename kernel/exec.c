@@ -33,6 +33,14 @@ exec(char *path, char **argv)
   struct proc *p = myproc();
 
   /* CSE 536: (2.1) Check on-demand status. */
+  
+
+  if (strncmp("/init", path, 5) == 0 || strncmp("sh", path, 2) == 0) {
+    p->ondemand = false;
+  } else {
+    p->ondemand = true;
+  }
+
   if (p->ondemand == true) {
     print_ondemand_proc(path);
   }
@@ -55,6 +63,7 @@ exec(char *path, char **argv)
   if((pagetable = proc_pagetable(p)) == 0)
     goto bad;
 
+
   // Load program into memory.
   for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){
     if(readi(ip, 0, (uint64)&ph, off, sizeof(ph)) != sizeof(ph))
@@ -68,12 +77,16 @@ exec(char *path, char **argv)
     if(ph.vaddr % PGSIZE != 0)
       goto bad;
 
-    uint64 sz1;
-    if((sz1 = uvmalloc(pagetable, sz, ph.vaddr + ph.memsz, flags2perm(ph.flags))) == 0)
-      goto bad;
-    sz = sz1;
-    if(loadseg(pagetable, ph.vaddr, ip, ph.off, ph.filesz) < 0)
-      goto bad;
+    if (p->ondemand == false) {
+      uint64 sz1;
+      if((sz1 = uvmalloc(pagetable, sz, ph.vaddr + ph.memsz, flags2perm(ph.flags))) == 0)
+        goto bad;
+      sz = sz1;
+      if(loadseg(pagetable, ph.vaddr, ip, ph.off, ph.filesz) < 0)
+        goto bad;
+    } else {
+      print_skip_section(path, ph.vaddr, ph.vaddr + ph.memsz);
+    }
   }
   iunlockput(ip);
   end_op();

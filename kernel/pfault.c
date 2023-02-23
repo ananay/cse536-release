@@ -80,12 +80,84 @@ void page_fault_handler(void)
 
     /* Find faulting address. */
     uint64 faulting_addr = 0;
+    uint64 argc, sz = 0;
+    uint64 offset;
+    struct proghdr ph;
+    int i, off;
+    char *path = p->name;
+    faulting_addr = (r_stval() >> 12) << 12;
     print_page_fault(p->name, faulting_addr);
 
     /* Check if the fault address is a heap page. Use p->heap_tracker */
-    if (true) {
+    if (false) {
         goto heap_handle;
     }
+
+    begin_op();
+
+    struct inode *ip;
+    pagetable_t pagetable = 0;
+    struct elfhdr elf;
+
+    if((ip = namei(path)) == 0){
+        return;
+    }
+
+    ilock(ip);
+
+    // Check ELF header
+    if(readi(ip, 0, (uint64)&elf, 0, sizeof(elf)) != sizeof(elf))
+        goto bad;
+
+    if(elf.magic != ELF_MAGIC)
+        goto bad;
+
+    if((pagetable = p->pagetable) == 0)
+        goto bad;
+    
+    uint64 copy_size;
+
+    for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)) {
+        if(readi(ip, 0, (uint64)&ph, off, sizeof(ph)) != sizeof(ph))
+            goto bad;
+        if(ph.type != ELF_PROG_LOAD)
+            continue;
+        if(ph.memsz < ph.filesz)
+            goto bad;
+        if(ph.vaddr + ph.memsz < ph.vaddr)
+            goto bad;
+        
+        uint64 start_ph = ph.vaddr;
+        uint64 end_ph = ph.vaddr + ph.memsz;
+
+        if (faulting_addr >= start_ph && faulting_addr < end_ph) {
+            if ((end_ph - faulting_addr) >= PGSIZE) {
+                copy_size = PGSIZE;
+            } else {
+                copy_size = end_ph - faulting_addr;
+            }
+
+            offset = faulting_addr - start_ph;
+            
+            if (uvmalloc(pagetable, faulting_addr, faulting_addr + copy_size, flags2perm(ph.flags)) == 0) {
+                printf("error: uvmalloc failed\n");
+                goto bad;
+            }
+            print_load_seg(faulting_addr, ph.off + offset, copy_size);
+
+            if (loadseg(pagetable, faulting_addr, ip, ph.off + offset, copy_size) < 0) {
+                printf("error: loadseg failed\n");
+                goto bad;
+            }
+
+        }
+        
+        break;
+
+    }
+
+    // iunlockput(ip);
+    // end_op();
 
     /* If it came here, it is a page from the program binary that we must load. */
     print_load_seg(faulting_addr, 0, 0);
@@ -115,4 +187,13 @@ out:
     /* Flush stale page table entries. This is important to always do. */
     sfence_vma();
     return;
+
+bad:
+  if(pagetable)
+    proc_freepagetable(pagetable, sz);
+  if(ip){
+    iunlockput(ip);
+    end_op();
+  }
+  return;
 }
