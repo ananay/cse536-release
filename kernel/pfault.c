@@ -78,13 +78,86 @@ void page_fault_handler(void)
     /* Track whether the heap page should be brought back from disk or not. */
     bool load_from_disk = false;
 
+    pagetable_t pagetable = 0, oldpagetable;
+
     /* Find faulting address. */
     uint64 faulting_addr = 0;
+    // Find PFaddr by reading stval
+    faulting_addr = r_stval();
+    // Shift faulting address by 12 bits
+    faulting_addr = faulting_addr >> 12;
+    faulting_addr = faulting_addr << 12;
     print_page_fault(p->name, faulting_addr);
 
     /* Check if the fault address is a heap page. Use p->heap_tracker */
-    if (true) {
+    if (false) {
         goto heap_handle;
+    }
+
+    struct elfhdr elf;
+    struct proghdr ph;
+    struct inode *ip;
+    uint64 off;
+    int i, sz;
+
+    begin_op();
+
+    if((ip = namei(p->name)) == 0){
+        end_op();
+        return;
+    }
+    ilock(ip);
+
+    // Check ELF header
+    if(readi(ip, 0, (uint64)&elf, 0, sizeof(elf)) != sizeof(elf))
+        goto bad;
+
+    if(elf.magic != ELF_MAGIC)
+        goto bad;
+
+    // if ((pagetable = p->pagetable) == 0)
+    //     goto bad;
+
+    for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){
+        // Iterating through the program headers
+        // Check if each program header, see if the faulting_addr belongs between
+        // ph.vaddr and ph.vaddr + memsize
+        
+        if(readi(ip, 0, (uint64)&ph, off, sizeof(ph)) != sizeof(ph))
+            goto bad;
+        if(ph.type != ELF_PROG_LOAD)
+            continue;
+        if(ph.memsz < ph.filesz)
+            goto bad;
+        if(ph.vaddr + ph.memsz < ph.vaddr)
+            goto bad;
+        if(ph.vaddr % PGSIZE != 0)
+            goto bad;
+
+        // if faulting_addr is between ph.vaddr and ph.vaddr + memsize
+        // then we need to load the segment into memory
+        // if faulting_addr is not between ph.vaddr and ph.vaddr + memsize
+        // then we need to skip this segment
+
+        uint64 copy_size;
+        if (faulting_addr >= ph.vaddr && faulting_addr < ph.vaddr + ph.memsz) {
+
+            if (faulting_addr + PGSIZE <= ph.vaddr + ph.memsz) {
+                copy_size = PGSIZE;
+            } else {
+                copy_size = ph.vaddr + ph.memsz - faulting_addr;
+            }
+
+        }
+
+        // Calculate offset
+        uint64 offset_ph = faulting_addr - ph.vaddr;
+        uint64 offset_ip = ph.off + offset_ph;
+
+        if((uvmalloc(pagetable, faulting_addr, faulting_addr + copy_size, flags2perm(ph.flags))) == 0)
+            goto bad;
+        if(loadseg(pagetable, faulting_addr, ip, offset_ip, copy_size) < 0)
+            goto bad;
     }
 
     /* If it came here, it is a page from the program binary that we must load. */
@@ -110,6 +183,14 @@ heap_handle:
 
     /* Track that another heap page has been brought into memory. */
     p->resident_heap_pages++;
+
+bad:
+  if(pagetable)
+    proc_freepagetable(pagetable, sz);
+  if(ip){
+    iunlockput(ip);
+    end_op();
+  }
 
 out:
     /* Flush stale page table entries. This is important to always do. */
