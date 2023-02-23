@@ -78,6 +78,8 @@ void page_fault_handler(void)
     /* Track whether the heap page should be brought back from disk or not. */
     bool load_from_disk = false;
 
+    pagetable_t pagetable = 0, oldpagetable;
+
     /* Find faulting address. */
     uint64 faulting_addr = 0;
     uint64 argc, sz = 0;
@@ -96,7 +98,6 @@ void page_fault_handler(void)
     begin_op();
 
     struct inode *ip;
-    pagetable_t pagetable = 0;
     struct elfhdr elf;
 
     if((ip = namei(path)) == 0){
@@ -182,7 +183,6 @@ heap_handle:
 
     /* Track that another heap page has been brought into memory. */
     p->resident_heap_pages++;
-
 out:
     /* Flush stale page table entries. This is important to always do. */
     sfence_vma();

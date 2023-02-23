@@ -10,7 +10,8 @@
 // static 
 int loadseg(pde_t *, uint64, struct inode *, uint, uint);
 
-int flags2perm(int flags)
+int 
+flags2perm(int flags)
 {
     int perm = 0;
     if(flags & 0x1)
