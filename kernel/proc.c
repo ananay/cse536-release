@@ -285,14 +285,25 @@ growproc(int n)
   n = PGROUNDUP(n);
 
   sz = p->sz;
-  if(n > 0){
-    if((sz = uvmalloc(p->pagetable, sz, sz + n, PTE_W)) == 0) {
-      return -1;
+
+  // 2.3.1: Check if the process is not on demand, then allocate pages.
+  if (n > 0) {
+    if (p->ondemand == false) {
+      if ((sz = uvmalloc(p->pagetable, sz, sz + n, PTE_W)) == 0) {
+        return -1;
+      }
+    } else {
+      print_skip_heap_region(p->name, sz, n/PGSIZE);
+      // Track every heap page allocation
+      track_heap(p, sz, n/PGSIZE);
+      sz = sz + n;
     }
-  } else if(n < 0){
-    sz = uvmdealloc(p->pagetable, sz, sz + n);
+  } else if(n < 0) {
+      sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
+
   p->sz = sz;
+
   return 0;
 }
 

@@ -88,11 +88,17 @@ void page_fault_handler(void)
     int i, off;
     char *path = p->name;
     faulting_addr = (r_stval() >> 12) << 12;
+
     print_page_fault(p->name, faulting_addr);
 
     /* Check if the fault address is a heap page. Use p->heap_tracker */
-    if (false) {
-        goto heap_handle;
+    for (int i = 0; i < MAXHEAP; i++) {
+        if (faulting_addr == p->heap_tracker[i].addr) {
+            if (p->heap_tracker[i].startblock != -1) {
+                load_from_disk = true;
+            }
+            goto heap_handle;
+        }
     }
 
     begin_op();
@@ -151,9 +157,11 @@ void page_fault_handler(void)
                 goto bad;
             }
 
+            break;
+
         }
         
-        break;
+        
 
     }
 
@@ -167,14 +175,24 @@ void page_fault_handler(void)
     goto out;
 
 heap_handle:
+    printf("heap handle\n");
     /* 2.4: Check if resident pages are more than heap pages. If yes, evict. */
-    if (p->resident_heap_pages == MAXRESHEAP) {
+    if (p->resident_heap_pages > MAXRESHEAP) {
         evict_page_to_disk(p);
     }
 
     /* 2.3: Map a heap page into the process' address space. (Hint: check growproc) */
+    if ((sz = uvmalloc(p->pagetable, faulting_addr, faulting_addr + PGSIZE, PTE_W|PTE_U)) == 0) {
+        printf("error: uvmalloc failed\n");
+        goto bad;
+    }
 
     /* 2.4: Update the last load time for the loaded heap page in p->heap_tracker. */
+    for (int i = 0; i < MAXHEAP; i++) {
+        if (faulting_addr == p->heap_tracker[i].addr) {
+            p->heap_tracker[i].last_load_time = ticks;
+        }
+    }
 
     /* 2.4: Heap page was swapped to disk previously. We must load it from disk. */
     if (load_from_disk) {

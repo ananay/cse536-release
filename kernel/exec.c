@@ -86,6 +86,7 @@ exec(char *path, char **argv)
       if(loadseg(pagetable, ph.vaddr, ip, ph.off, ph.filesz) < 0)
         goto bad;
     } else {
+      sz = ph.vaddr + ph.memsz;
       print_skip_section(path, ph.vaddr, ph.vaddr + ph.memsz);
     }
   }
@@ -100,6 +101,7 @@ exec(char *path, char **argv)
   // Make the first inaccessible as a stack guard.
   // Use the second as the user stack.
   sz = PGROUNDUP(sz);
+  printf("\nPage: %d\n", sz);
   uint64 sz1;
   if((sz1 = uvmalloc(pagetable, sz, sz + 2*PGSIZE, PTE_W)) == 0)
     goto bad;
