@@ -232,7 +232,7 @@ uint64
 uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
 {
 
-  printf("oldsz: %d, newsz: %d, xperm: %d", oldsz, newsz, xperm);
+  // printf("oldsz: %d, newsz: %d, xperm: %d", oldsz, newsz, xperm);
 
   char *mem;
   uint64 a;
