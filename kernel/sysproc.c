@@ -90,3 +90,9 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_ctime(void) {
+    printf("%s", "sys_ctime");
+    return r_time();
+}
