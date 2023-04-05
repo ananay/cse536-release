@@ -15,6 +15,8 @@ int uthread_scheduling_algorithm = -1;
 
 int created_threads = 0;
 
+int prev_tid = 0;
+
 /* Get thread ID */
 int get_current_tid(void) {
     return current_thread->tid;
@@ -86,19 +88,27 @@ int find_next_thread(void) {
     int min_sched_time = 100000;
     int min_priority = -1;
 
-    for (int i = 1; i < MAXULTHREADS; i++) {
-        if ((uthread_arr[i].tid != current_thread->tid) && uthread_arr[i].state == RUNNABLE) {
+    for (int i = prev_tid + 1; i <= MAXULTHREADS + prev_tid; i++) {
+        int idx = i % MAXULTHREADS;
+        if ((prev_tid != &(uthread_arr[idx]).tid) && (uthread_arr[idx].state == RUNNABLE || uthread_arr[idx].state == YIELD)) {
+            if (uthread_arr[idx].state == YIELD) {
+                // printf("Created Threads: %d\n", created_threads);
+                uthread_arr[idx].state = RUNNABLE;
+                if (created_threads != 1) {
+                    continue;
+                }
+            }
             if (uthread_scheduling_algorithm == 0) {
                 // printf("%d has sched time %d. Min: %d", i, uthread_arr[i].sched_time, min_sched_time);
-                if (uthread_arr[i].sched_time < min_sched_time) {
-                    min_sched_time = uthread_arr[i].sched_time;
-                    next_thread = i;
+                if (uthread_arr[idx].sched_time < min_sched_time) {
+                    min_sched_time = uthread_arr[idx].sched_time;
+                    next_thread = idx;
                 }
             } else if (uthread_scheduling_algorithm == 1) {
                 // printf("%d has priority %d. Min: %d\n", i, uthread_arr[i].priority, min_priority);
-                if (uthread_arr[i].priority > min_priority) {
-                    min_priority = uthread_arr[i].priority;
-                    next_thread = i;
+                if (uthread_arr[idx].priority > min_priority) {
+                    min_priority = uthread_arr[idx].priority;
+                    next_thread = idx;
                 }
             }
         }
@@ -126,6 +136,8 @@ void ulthread_schedule(void) {
 
         ulthread_context_switch(&(uthread_arr[temp_tid].context), &(uthread_arr[next_thread].context));
 
+        // printf("BACK FROM YIELD!");
+
     }
 
     // printf("thread %d is done\n", temp_tid);
@@ -140,16 +152,21 @@ void ulthread_yield(void) {
         exit(0);
     }
 
-    struct uthread_def *temp = current_thread;
-    struct uthread_def *next = &uthread_arr[0];
+    int temp_tid = current_thread->tid;
+    prev_tid = current_thread->tid;
+    int next_thread_tid = 0;
 
-    temp->state = YIELD;
+    uthread_arr[temp_tid].state = YIELD;
 
-    current_thread = next;
+    current_thread = &(uthread_arr[next_thread_tid]);
 
     /* Please add thread-id instead of '0' here. */
-    printf("[*] ultyield(tid: %d)\n", temp->tid);
-    ulthread_context_switch(&(temp->context), &(next->context));
+    printf("[*] ultyield(tid: %d)\n", temp_tid);
+
+    // printf("YIELD!");
+
+    ulthread_context_switch(&(uthread_arr[temp_tid].context), &(uthread_arr[next_thread_tid].context));
+
 }
 
 /* Destroy thread */
@@ -158,7 +175,7 @@ void ulthread_destroy(void) {
     current_thread->state = FREE;
     current_thread->tid = -1;
 
-    // created_threads--;
+    created_threads--;
 
     struct uthread_def *temp = current_thread;
     struct uthread_def *next = &uthread_arr[0];

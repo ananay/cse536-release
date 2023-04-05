@@ -93,6 +93,5 @@ sys_uptime(void)
 
 uint64
 sys_ctime(void) {
-    printf("%s", "sys_ctime");
     return r_time();
 }
