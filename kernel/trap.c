@@ -51,6 +51,21 @@ usertrap(void)
   p->trapframe->epc = r_sepc();
 
   if(r_scause() == 8){
+
+    // CSE 536: If VM, jump back to the VM's stvec
+    if (p->proc_te_vm) {
+      trap_and_emulate_ecall();
+      if (killed(p)) {
+        exit(-1);
+      }
+      // give up the CPU if this is a timer interrupt.
+      if(which_dev == 2)
+        yield();
+
+      usertrapret();
+
+    }
+
     // system call
     if(killed(p))
       exit(-1);
@@ -64,6 +79,8 @@ usertrap(void)
     intr_on();
 
     syscall();
+  } else if (r_scause() == 2) {
+    trap_and_emulate();
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {

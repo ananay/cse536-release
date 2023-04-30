@@ -130,6 +130,9 @@ exec(char *path, char **argv)
 
   // CSE 536: Allocate 4MB of memory for the VM starting from memaddr.
   if (strncmp(p->name, "vm-", 3) == 0) {
+
+    p->proc_te_vm = 1;
+
     uint64 memaddr = 0x80000000;
     if((sz1 = uvmalloc(pagetable, memaddr, memaddr + 1024*PGSIZE, PTE_W)) == 0) {
       printf("Error: could not allocate memory at 0x80000000 for VM.\n");

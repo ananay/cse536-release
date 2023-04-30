@@ -75,6 +75,7 @@ struct vm_virtual_state vm_vs;
 int vm_vs_current_mode;
 
 void handle_csr_instruction(uint32 op, uint64* rd, uint64* rs1, struct vm_reg* rs2) {
+    printf("handle_csr_instruction: op=%d, rd=%p, rs1=%p, rs2=%p\n", op, *rd, *rs1, rs2->code);
     struct proc *p = myproc();
     if (vm_vs_current_mode < rs2->mode) {
         setkilled(p);
@@ -109,6 +110,38 @@ void handle_csr_instruction(uint32 op, uint64* rd, uint64* rs1, struct vm_reg* r
 }
 
 
+uint64* retrieve_uvm_register(uint32 regcode) {
+    // In trapframe, ra always starts from 0x40
+    int index = ((regcode-1)*sizeof(uint64));
+    struct proc *p = myproc();
+    uint64 start = (uint64) &(p->trapframe->ra);
+    uint64 addr = start + index;
+#if 0
+    printf("p->trapframe->ra: %p\n", &(p->trapframe->ra));
+    printf("index = %d\n", index);
+    printf("addr: %p\n", addr);
+#endif
+    return (uint64*) addr;
+}
+
+
+
+struct vm_reg* get_vm_register(uint32 regcode) {
+    int nregs = sizeof(vm_vs)/sizeof(struct vm_reg);
+    struct vm_reg* cur  = &(vm_vs.v_uie);
+    for (int i = 0; i < nregs; i++) {
+        if (cur->code == regcode) {
+            return cur;
+        }
+        cur++;
+    }
+
+    // Check if this is user trap setup
+    return NULL;
+}
+
+
+
 void trap_and_emulate(void) {
 
     struct proc *p = myproc();
@@ -137,29 +170,11 @@ void trap_and_emulate(void) {
     // uint32 rs1      = 0;
     // uint32 upper    = 0;
 
-    int index = ((rd-1)*sizeof(uint64));
-    uint64 start = (uint64) &(p->trapframe->ra);
-    uint64 addr = start + index;
 
-    uint64* rd_ptr = (uint64*) addr;
+    uint64* rd_ptr = retrieve_uvm_register(rd);
+    uint64* rs1_ptr = retrieve_uvm_register(rs1);
 
-    int index2 = ((rd-1)*sizeof(uint64));
-    uint64 start2 = (uint64) &(p->trapframe->ra);
-    uint64 addr2 = start2 + index2;
-
-    uint64* rs1_ptr = (uint64 *) addr2;
-
-    struct vm_reg* upper_ptr = NULL;
-
-    // Get vm register
-    int nregs = sizeof(vm_vs)/sizeof(struct vm_reg);
-    struct vm_reg* cur = &(vm_vs.v_uie);
-    for (int i = 0; i < nregs; i++) {
-        if (cur->code == op) {
-            upper_ptr = cur;
-        }
-        cur++;
-    }
+    struct vm_reg* upper_ptr = get_vm_register(uimm);
 
     if (op == 0x73) {
         handle_csr_instruction(op, rd_ptr, rs1_ptr, upper_ptr);
